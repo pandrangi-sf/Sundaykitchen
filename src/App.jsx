@@ -6,7 +6,7 @@ import { computeTargets } from './lib/targetsEngine.js';
 import { hasAllConsents } from './lib/consent.js';
 import {
   saveProfile, loadProfile, saveTargets, loadTargets,
-  saveConsents, loadConsents, exportMyData, clearLocal, normalizeProfile
+  saveConsents, loadConsents, exportMyData, deleteMyData, clearLocal, normalizeProfile
 } from './lib/db.js';
 import Auth from './components/Auth.jsx';
 import OnboardingWizard from './components/OnboardingWizard.jsx';
@@ -130,6 +130,18 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [uid]);
 
+  const handleDelete = useCallback(async () => {
+    const ok = window.confirm(
+      'Delete your profile, health data, targets and consents? This cannot be undone.'
+    );
+    if (!ok) return;
+    setBusy(true);
+    await deleteMyData(uid);
+    await signOut();
+    setProfile(null); setTargets(null); setConsents([]); setEditing(false);
+    setBusy(false);
+  }, [uid, signOut]);
+
   if (loading || !ready) {
     return (
       <div className="min-h-screen flex items-center justify-center text-ink/50">
@@ -161,6 +173,7 @@ export default function App() {
         onEdit={() => setEditing(true)}
         onSignOut={handleSignOut}
         onExport={handleExport}
+        onDelete={handleDelete}
       />
     );
   } else {
