@@ -1,4 +1,4 @@
-import { AlertTriangle, Droplet, Dumbbell, Utensils, Pencil, LogOut, Download } from 'lucide-react';
+import { AlertTriangle, Droplet, Dumbbell, Utensils, Pencil, LogOut, Download, Trash2 } from 'lucide-react';
 import { pickMeals } from '../data/mealLibrary.js';
 import { buildWorkout } from '../lib/workoutTemplates.js';
 
@@ -26,7 +26,7 @@ function Stat({ label, value, unit }) {
   );
 }
 
-export default function PlanView({ profile, targets, onEdit, onSignOut, onExport }) {
+export default function PlanView({ profile, targets, onEdit, onSignOut, onExport, onDelete }) {
   if (!targets) return null;
   const escalated = targets.escalated;
   const calories = targets.calorie_target;
@@ -149,6 +149,11 @@ export default function PlanView({ profile, targets, onEdit, onSignOut, onExport
         <button onClick={onEdit}
           className="w-full flex items-center justify-center gap-2 rounded-xl border border-teal text-teal font-semibold py-3 hover:bg-teal/5">
           <Pencil size={18} /> Update my answers
+        </button>
+
+        <button onClick={onDelete}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-300 text-red-600 font-medium py-3 hover:bg-red-50">
+          <Trash2 size={16} /> Delete my data
         </button>
       </div>
     </div>
