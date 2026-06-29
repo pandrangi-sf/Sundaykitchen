@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Meal & Gym Plan">
+  <rect width="512" height="512" fill="#2E7D6F"/>
+  <circle cx="256" cy="256" r="150" fill="#F7F3EC"/>
+  <path d="M196 176v160M196 176c-26 0-44 18-44 48s18 48 44 48" fill="none" stroke="#2E7D6F" stroke-width="22" stroke-linecap="round"/>
+  <path d="M316 176v160M316 176c26 0 44 18 44 48s-18 48-44 48" fill="none" stroke="#E0B65A" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="256" cy="262" r="40" fill="#E0B65A"/>
+</svg>
