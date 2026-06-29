@@ -44,8 +44,21 @@ Never put the Supabase `service_role` key in the client.
 
 ## Settings (data rights)
 - Export my data: download a JSON of your profile, targets, and consents (wired in `db.js`).
-- Delete my account: stubbed for Phase 1 (cascading delete is defined in the schema via
-  `on delete cascade`; wire the auth-user deletion before launch).
+- Delete my data: wired in `db.js` (`deleteMyData`) - removes the signed-in user's
+  profile, health, targets and consent rows (RLS restricts deletes to `auth.uid()`),
+  then signs out. The schema also cascades via `on delete cascade`. Note: removing the
+  Supabase auth-user record itself needs a privileged server call (never a service_role
+  key in the client) and is handled out-of-band before launch.
+
+## Sample profiles (UAT)
+When `VITE_APP_ENV=uat`, the onboarding screen shows a "Fill sample profile" bar with
+one-tap presets (`src/data/samplePresets.js`): a metric fat-loss profile, an imperial
+muscle-gain profile with a blood-pressure lever, and a pregnancy profile that exercises
+the escalation path. These buttons never render in production.
+
+## PWA icons
+App icons live in `public/` as SVGs (`favicon.svg`, `icon.svg`) and are referenced by the
+vite-plugin-pwa manifest. Replace with PNGs if you need wider install-icon support.
 
 ## Safety model
 - Consent gate: four separate, unbundled, not-pre-ticked checkboxes block plan generation;
