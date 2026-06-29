@@ -20,6 +20,13 @@ Run these on the STAGING environment (VITE_APP_ENV=uat) before promoting to prod
 - [ ] Health step can be SKIPPED and still produce a basic plan.
 - [ ] Medications note is captured and later shown back with the 'not used in calculation' note.
 
+## Sample profiles (UAT only)
+- [ ] "Fill sample profile" bar is visible on onboarding (staging only).
+- [ ] "Fat loss (metric)" preset fills the form and produces a normal plan.
+- [ ] "Muscle gain (imperial, blood pressure)" preset fills imperial fields + BP lever.
+- [ ] "Escalation path (pregnancy)" preset triggers the professional-referral message.
+- [ ] The sample bar is NOT shown when VITE_APP_ENV=prod.
+
 ## Consent gate
 - [ ] Plan is blocked until ALL FOUR boxes are checked.
 - [ ] Boxes are separate, not bundled, and none are pre-ticked.
@@ -40,8 +47,11 @@ Run these on the STAGING environment (VITE_APP_ENV=uat) before promoting to prod
 ## Privacy / data
 - [ ] A second test user cannot see the first user's rows (RLS).
 - [ ] 'Export my data' downloads a JSON with profile + targets + consents.
+- [ ] 'Delete my data' asks for confirmation, then removes the user's rows and signs out.
+- [ ] After deletion, signing back in starts a fresh onboarding (no old data).
 
 ## Promote
+- [ ] App installs as a PWA (manifest + icon load; standalone display).
 - [ ] schema.sql also run in PROD project.
 - [ ] Prod env vars set (VITE_APP_ENV=prod), UAT ribbon hidden in prod.
 - [ ] Legal review of Terms/Privacy/consent/disclaimer complete before opening public signups.
