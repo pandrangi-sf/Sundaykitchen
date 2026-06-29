@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background-color: #F7F3EC;
+  color: #2B2A26;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Inputs get a consistent base style */
+input, select, textarea {
+  font-family: inherit;
+}
