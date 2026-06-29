@@ -47,7 +47,7 @@ function toHealthRow(p, userId) {
     user_id: userId,
     health_flags: p.health_flags || [],
     health_other: p.health_other || null,
-    meds_note: p.meds_note || null,   // stored only; never used in calculation
+    meds_note: p.meds_note || null, // stored only; never used in calculation
     updated_at: new Date().toISOString()
   };
 }
@@ -137,7 +137,7 @@ export async function loadConsents(userId) {
   return data || [];
 }
 
-// --- export / delete stubs (wire fully before launch) ---
+// --- export / delete ---
 export async function exportMyData(userId) {
   const [profile, targets, consents] = await Promise.all([
     loadProfile(userId), loadTargets(userId), loadConsents(userId)
@@ -147,4 +147,25 @@ export async function exportMyData(userId) {
 
 export async function clearLocal() {
   Object.values(LS).forEach((k) => localStorage.removeItem(k));
+}
+
+// Delete the signed-in user's own data. RLS restricts every delete to
+// auth.uid() === user, so a user can only ever erase their own rows.
+// Note: this removes profile/health/targets/consents rows. Removing the
+// auth user account itself requires a privileged server call and is handled
+// out-of-band (documented in README) - never with a service_role key in the client.
+export async function deleteMyData(userId) {
+  if (!isSupabaseConfigured) {
+    await clearLocal();
+    return { error: null };
+  }
+  const results = await Promise.all([
+    supabase.from('consents').delete().eq('user_id', userId),
+    supabase.from('targets').delete().eq('user_id', userId),
+    supabase.from('health_profile').delete().eq('user_id', userId),
+    supabase.from('profiles').delete().eq('id', userId)
+  ]);
+  const error = results.map((r) => r.error).find(Boolean) || null;
+  await clearLocal();
+  return { error };
 }
