@@ -1,20 +1,37 @@
-import { useEffect, useState } from 'react';
-import { Loader2, LogOut, Pencil } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { useAuth } from './context/AuthContext.jsx';
-import { isUAT } from './lib/supabaseClient.js';
+import { isUAT, isSupabaseConfigured } from './lib/supabaseClient.js';
+import { computeTargets } from './lib/targetsEngine.js';
+import { hasAllConsents } from './lib/consent.js';
+import {
+  saveProfile, loadProfile, saveTargets, loadTargets,
+  saveConsents, loadConsents, exportMyData, clearLocal, normalizeProfile
+} from './lib/db.js';
 import Auth from './components/Auth.jsx';
 import OnboardingWizard from './components/OnboardingWizard.jsx';
+import ConsentGate from './components/ConsentGate.jsx';
+import PlanView from './components/PlanView.jsx';
 
-// Stage 2: auth + onboarding flow.
-// Profile is held in localStorage for now; Stage 3 wires Supabase tables,
-// the consent gate, and the plan output. After onboarding we show a
-// temporary 'profile captured' summary as a placeholder for the dashboard.
+// Stage 3 flow: auth -> onboarding -> consent gate -> compute targets -> plan.
+// When Supabase is unconfigured we use a synthetic 'local' user id so the
+// localStorage fallback in db.js still works end to end.
 
-const PROFILE_KEY = 'mgp.profile.v1';
+const LOCAL_UID = 'local-user';
 
-function loadProfile() {
-  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null'); }
-  catch { return null; }
+// Build the engine input from the (metric-normalized) wizard profile.
+function toEngineInput(profile) {
+  const n = normalizeProfile(profile);
+  return {
+    sex: profile.sex,
+    dob: profile.dob,
+    height_cm: n.height_cm,
+    weight_kg: n.weight_kg,
+    activity: profile.activity,
+    goal: profile.goal,
+    meals_per_day: profile.meals_per_day,
+    health_flags: profile.health_flags || []
+  };
 }
 
 function UatRibbon() {
@@ -26,70 +43,94 @@ function UatRibbon() {
   );
 }
 
-function ProfileSummary({ profile, onEdit, onSignOut }) {
-  const rows = [
-    ['Goal', profile.goal],
-    ['Sex', profile.sex],
-    ['Activity', profile.activity],
-    ['Diet', profile.diet],
-    ['Allergies', (profile.allergies || []).join(', ') || 'none'],
-    ['Meals/day', profile.meals_per_day],
-    ['Training days', profile.training_days],
-    ['Health flags', (profile.health_flags || []).join(', ') || 'none']
-  ];
-  return (
-    <div className="min-h-screen px-5 py-8">
-      <div className="max-w-md mx-auto">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-ink">Your profile</h1>
-          <button onClick={onSignOut} className="flex items-center gap-1 text-sm text-ink/60 hover:text-ink">
-            <LogOut size={16} /> Sign out
-          </button>
-        </div>
-        <p className="mt-2 text-sm text-ink/60">
-          Saved. In the next step we&apos;ll add the consent gate and generate your personalized targets,
-          starter meal framework, and workout template.
-        </p>
-
-        <div className="mt-5 rounded-2xl border border-ink/10 bg-white divide-y divide-ink/10">
-          {rows.map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between px-4 py-3">
-              <span className="text-sm text-ink/60">{k}</span>
-              <span className="text-sm font-medium text-ink capitalize">{String(v)}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-4 rounded-xl bg-paper border border-ink/10 px-4 py-3 text-xs text-ink/60">
-          General wellness guidance, not medical advice — consult your doctor or dietitian.
-        </div>
-
-        <button onClick={onEdit}
-          className="mt-5 w-full flex items-center justify-center gap-2 rounded-xl border border-teal text-teal font-semibold py-3 hover:bg-teal/5">
-          <Pencil size={18} /> Update my answers
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
-  const { user, loading, signOut, isSupabaseConfigured } = useAuth();
-  const [profile, setProfile] = useState(loadProfile());
-  const [onboarding, setOnboarding] = useState(false);
+  const { user, loading, signOut } = useAuth();
+  const uid = isSupabaseConfigured ? user?.id : LOCAL_UID;
+  const signedIn = isSupabaseConfigured ? Boolean(user) : true;
 
-  // When a user signs in and has no profile yet, start onboarding.
+  const [profile, setProfile] = useState(null);
+  const [targets, setTargets] = useState(null);
+  const [consents, setConsents] = useState([]);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const consented = hasAllConsents(consents);
+
+  // Load existing data once we know who the user is.
   useEffect(() => {
-    if (user && !profile) setOnboarding(true);
-  }, [user, profile]);
+    let active = true;
+    async function init() {
+      if (!signedIn || !uid) { setReady(true); return; }
+      const [p, t, c] = await Promise.all([loadProfile(uid), loadTargets(uid), loadConsents(uid)]);
+      if (!active) return;
+      setProfile(p); setTargets(t); setConsents(c); setReady(true);
+    }
+    setReady(false);
+    init();
+    return () => { active = false; };
+  }, [signedIn, uid]);
 
-  function handleComplete(p) {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+  // Safety net: if we have a profile + consent but no targets, compute them.
+  useEffect(() => {
+    let active = true;
+    async function ensure() {
+      if (ready && profile && consented && !targets && !busy && !editing) {
+        setBusy(true);
+        const t = computeTargets(toEngineInput(profile));
+        await saveTargets(t, uid);
+        if (active) setTargets(t);
+        setBusy(false);
+      }
+    }
+    ensure();
+    return () => { active = false; };
+  }, [ready, profile, consented, targets, busy, editing, uid]);
+
+  const handleOnboardingComplete = useCallback(async (p) => {
+    setBusy(true);
+    await saveProfile(p, uid);
     setProfile(p);
-    setOnboarding(false);
-  }
+    setEditing(false);
+    if (hasAllConsents(consents)) {
+      const t = computeTargets(toEngineInput(p));
+      await saveTargets(t, uid);
+      setTargets(t);
+    } else {
+      setTargets(null); // force consent gate before plan
+    }
+    setBusy(false);
+  }, [uid, consents]);
 
-  if (loading) {
+  const handleAccept = useCallback(async (checkedMap) => {
+    setBusy(true);
+    await saveConsents(checkedMap, uid);
+    const fresh = await loadConsents(uid);
+    setConsents(fresh);
+    if (profile) {
+      const t = computeTargets(toEngineInput(profile));
+      await saveTargets(t, uid);
+      setTargets(t);
+    }
+    setBusy(false);
+  }, [uid, profile]);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    await clearLocal();
+    setProfile(null); setTargets(null); setConsents([]);
+  }, [signOut]);
+
+  const handleExport = useCallback(async () => {
+    const data = await exportMyData(uid);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'my-data.json'; a.click();
+    URL.revokeObjectURL(url);
+  }, [uid]);
+
+  if (loading || !ready) {
     return (
       <div className="min-h-screen flex items-center justify-center text-ink/50">
         <Loader2 className="animate-spin" />
@@ -97,27 +138,38 @@ export default function App() {
     );
   }
 
-  // If Supabase is not configured, let people preview onboarding without auth.
-  const signedIn = isSupabaseConfigured ? Boolean(user) : true;
+  if (!signedIn) return (<><UatRibbon /><Auth /></>);
 
-  return (
-    <>
-      <UatRibbon />
-      {!signedIn && <Auth />}
-      {signedIn && (onboarding || !profile) && (
-        <OnboardingWizard
-          initial={profile}
-          onComplete={handleComplete}
-          onCancel={() => profile && setOnboarding(false)}
-        />
-      )}
-      {signedIn && profile && !onboarding && (
-        <ProfileSummary
-          profile={profile}
-          onEdit={() => setOnboarding(true)}
-          onSignOut={async () => { await signOut(); localStorage.removeItem(PROFILE_KEY); setProfile(null); }}
-        />
-      )}
-    </>
-  );
+  const needsOnboarding = editing || !profile;
+
+  let screen;
+  if (needsOnboarding) {
+    screen = (
+      <OnboardingWizard
+        initial={profile}
+        onComplete={handleOnboardingComplete}
+        onCancel={() => profile && setEditing(false)}
+      />
+    );
+  } else if (!consented) {
+    screen = <ConsentGate onAccept={handleAccept} busy={busy} />;
+  } else if (targets) {
+    screen = (
+      <PlanView
+        profile={profile}
+        targets={targets}
+        onEdit={() => setEditing(true)}
+        onSignOut={handleSignOut}
+        onExport={handleExport}
+      />
+    );
+  } else {
+    screen = (
+      <div className="min-h-screen flex items-center justify-center text-ink/50">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
+  }
+
+  return (<><UatRibbon />{screen}</>);
 }
