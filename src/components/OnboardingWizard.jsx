@@ -4,6 +4,8 @@ import {
   GOALS, SEXES, ACTIVITY_LEVELS, DIETS, COMMON_ALLERGENS,
   CUISINES, TRAINING_PLACES, HEALTH_FLAGS
 } from '../data/options.js';
+import { isUAT } from '../lib/supabaseClient.js';
+import { SAMPLE_PRESETS } from '../data/samplePresets.js';
 
 // One question group per screen. Health step is optional/skippable.
 // On finish, calls onComplete(profile). Consent gate + plan come in Stage 3.
@@ -95,6 +97,24 @@ export default function OnboardingWizard({ initial, onComplete, onCancel }) {
           <span className="text-xs text-ink/50">Step {step + 1} of {steps.length}</span>
         </div>
       </div>
+
+      {isUAT && (
+        <div className="mx-5 mt-3 rounded-xl border border-gold/50 bg-gold/10 px-4 py-3">
+          <p className="text-xs font-semibold text-ink/70">UAT — fill sample profile</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {SAMPLE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setP({ ...emptyProfile, ...preset.profile })}
+                className="rounded-full bg-white border border-ink/15 px-3 py-1 text-xs text-ink hover:border-teal"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 px-5 py-5 space-y-4">
         {step === 0 && (
